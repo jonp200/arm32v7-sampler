@@ -1,5 +1,5 @@
 services:
-  f1-sampler:
+  go-app:
     platform: linux/arm/v7
     build:
       context: .

@@ -1,4 +1,4 @@
-# F1 sampler
+# ARM v7 app sampler
 
 ## Deploy through Docker
 

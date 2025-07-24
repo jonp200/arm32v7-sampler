@@ -1,48 +1,37 @@
 package main
 
 import (
-	"database/sql"
 	"log"
 	"net/http"
 	"time"
 
+	"github.com/glebarez/sqlite"
 	"github.com/labstack/echo/v4"
-	_ "github.com/mattn/go-sqlite3"
+	"gorm.io/gorm"
 )
 
 type Record struct {
-	ID          int       `json:"id"`
+	ID          uint      `json:"id" gorm:"primaryKey"`
 	FirstName   string    `json:"first_name"`
 	Age         int       `json:"age"`
 	DateCreated time.Time `json:"date_created"`
 }
 
-var db *sql.DB
+var db *gorm.DB
 
 func main() {
 	var err error
-	db, err = sql.Open("sqlite3", "./records.db")
+	db, err = gorm.Open(sqlite.Open("records.db"), &gorm.Config{})
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("failed to connect database:", err)
 	}
 
-	// Create table if not exists
-	_, err = db.Exec(
-		`
-		CREATE TABLE IF NOT EXISTS records (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			first_name TEXT,
-			age INTEGER,
-			date_created DATETIME
-		);
-	`,
-	)
-	if err != nil {
-		log.Fatal(err)
+	// Auto-migrate table
+	if err := db.AutoMigrate(&Record{}); err != nil {
+		log.Fatal("failed to migrate schema:", err)
 	}
 
 	e := echo.New()
-
 	e.POST("/records", createRecord)
 	e.GET("/records", getRecords)
 
@@ -61,42 +50,23 @@ func createRecord(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid request"})
 	}
 
-	now := time.Now()
+	record := Record{
+		FirstName:   req.FirstName,
+		Age:         req.Age,
+		DateCreated: time.Now(),
+	}
 
-	result, err := db.Exec(
-		`INSERT INTO records (first_name, age, date_created) VALUES (?, ?, ?)`,
-		req.FirstName, req.Age, now,
-	)
-	if err != nil {
+	if err := db.Create(&record).Error; err != nil {
 		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Failed to insert record"})
 	}
 
-	id, _ := result.LastInsertId()
-	return c.JSON(
-		http.StatusCreated, echo.Map{
-			"id":           id,
-			"first_name":   req.FirstName,
-			"age":          req.Age,
-			"date_created": now,
-		},
-	)
+	return c.JSON(http.StatusCreated, record)
 }
 
 func getRecords(c echo.Context) error {
-	rows, err := db.Query(`SELECT id, first_name, age, date_created FROM records`)
-	if err != nil {
+	var records []Record
+	if err := db.Order("id").Find(&records).Error; err != nil {
 		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Failed to fetch records"})
 	}
-	defer rows.Close()
-
-	var records []Record
-	for rows.Next() {
-		var r Record
-		if err := rows.Scan(&r.ID, &r.FirstName, &r.Age, &r.DateCreated); err != nil {
-			return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Scan error"})
-		}
-		records = append(records, r)
-	}
-
 	return c.JSON(http.StatusOK, records)
 }

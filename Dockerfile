@@ -1,13 +1,5 @@
-# ---- Build Stage ----
-FROM golang:1.20-bullseye AS builder
-
-# Install ARM cross-compilation toolchain
-RUN dpkg --add-architecture armhf && \
-    apt-get update && \
-    apt-get install -y \
-        gcc-arm-linux-gnueabihf \
-        libc6-dev-armhf-cross \
-        ca-certificates
+# Stage 1: Build
+FROM golang:latest AS builder
 
 WORKDIR /app
 
@@ -21,28 +13,17 @@ RUN go mod download
 ENV GOOS=linux
 ENV GOARCH=arm
 ENV GOARM=7
-ENV CC=arm-linux-gnueabihf-gcc
 
-# Enable CGO and statically link libraries
-ENV CGO_ENABLED=1
-ENV CGO_LDFLAGS='-static'
-
-# Cross-compile for ARMv7 (32-bit)
 RUN go build -o app .
 
-# ---- Final Stage ----
-FROM arm32v7/debian:bullseye-slim
-
-WORKDIR /app
-
-# Ensure CA certs are available in target image
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+# Stage 2: Create minimal ARM image
+FROM arm32v7/debian:latest
 
 # Copy built binary
-COPY --from=builder /app/app .
+COPY --from=builder /app/app /usr/local/bin/app
 
 # Expose HTTP port
 EXPOSE 8080
 
 # Run the app
-ENTRYPOINT ["./app"]
+ENTRYPOINT ["/usr/local/bin/app"]
