@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   f1-sampler:
     platform: linux/arm/v7
