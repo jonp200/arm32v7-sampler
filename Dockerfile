@@ -17,7 +17,7 @@ ENV GOARM=7
 RUN go build -o app .
 
 # Stage 2: Create minimal ARM image
-FROM arm32v7/debian:latest
+FROM arm32v7/debian:12
 
 # Copy built binary
 COPY --from=builder /app/app /usr/local/bin/app
